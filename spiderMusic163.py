@@ -4,6 +4,7 @@ from Crypto.Util.Padding import pad
 import random
 import json
 import requests
+import base64
 
 headers = {
 			'Accept': '*/*',
@@ -29,15 +30,6 @@ def gen_ran_string(num=16):
         index = int(random.random() * b_len)
         result += chars[index]
     return result
-
-def aes(a, b):
-    key = b.encode('utf-8')
-    iv = b'0102030405060708'
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    padded_data = pad(a.encode('utf-8'), AES.block_size, style='pkcs7')
-    ciphertext = cipher.encrypt(padded_data)
-    return b64encode(ciphertext).decode('utf-8')
-
 
 class RSAKeyPair:
     def __init__(self, e_hex, d_hex, m_hex):
@@ -80,6 +72,19 @@ def post_request(url,params):
     res=session.post(url=url,headers=headers,data=params)
     return res.json()
 
+def aes_cbc_encrypt(plaintext: str, key: bytes, iv: bytes) -> bytes:
+    """
+    AES-CBC加密
+    :param plaintext: 明文（字符串）
+    :param key: 密钥（16/24/32字节）
+    :param iv: 初始化向量（16字节）
+    :return: Base64编码的密文字符串
+    """
+    cipher = AES.new(key, AES.MODE_CBC, iv=iv)
+    padded_data = pad(plaintext.encode('utf-8'), AES.block_size)
+    ciphertext = cipher.encrypt(padded_data)
+    return base64.b64encode(ciphertext)
+
 def encrypt_data(id):
     ramdom_string = gen_ran_string()
     params = {
@@ -90,20 +95,24 @@ def encrypt_data(id):
     }
     e = '010001'
     f = '00e0b509f6259df8642dbc35662901477df22677ec152b5ff68ace615bb7b725152b3ab17a876aea8a5aa76d2e417629ec4ee341f56135fccf695280104e0312ecbda92557c93870114af6c9d05c4f7f0c3685b7a46bee255932575cce10b424d813cfe4875d3e82047b97ddef52741d546b8e289dc6935b3ece0462db0a22b8e7'
-    g = '0CoJUm6Qyw8W8jud'
-    encText = aes(json.dumps(params), g)
-    encText = aes(encText, ramdom_string)
+    key = b'0CoJUm6Qyw8W8jud'
+    iv = b'0102030405060708'
+    encText=aes_cbc_encrypt(json.dumps(params),key,iv)
+    encText = aes_cbc_encrypt(encText.decode('utf-8'), ramdom_string.encode('utf-8'), iv)
+    encText=encText.decode('utf-8')
     encSecKey = rsa(ramdom_string, e, f)
     data = {
         'params': encText,
         'encSecKey': encSecKey
     }
     return data
+
 def get_song_by_songId(id):
     data=encrypt_data(id)
     res=post_request('https://music.163.com/weapi/song/enhance/player/url/v1',data)
     print(res)
+    return res
 
 if __name__ == '__main__':
-    id='8729797481' #音乐id
+    id='412902095' #音乐id
     get_song_by_songId(id)
